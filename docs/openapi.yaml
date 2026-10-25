@@ -1,0 +1,871 @@
+openapi: 3.1.0
+info:
+  title: Travel Expenses Tracker API
+  version: 1.0.0
+  description:
+    'Public shared ledger. No login, API key, or authorization. Anyone who reaches this API can read
+    or mutate all ledger data. Responses use Cache-Control: no-store. All money/rates are strings. Purchases
+    retain saved rates. Timezone: Asia/Tokyo. JSON mutations require application/json and reject an explicitly
+    foreign Origin; callers without Origin are supported. Bodies limited to 16 KiB. Error codes include
+    VALIDATION_ERROR, MALFORMED_JSON, BODY_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, FOREIGN_ORIGIN, NOT_FOUND,
+    VERSION_CONFLICT, NAME_CONFLICT, IDEMPOTENCY_CONFLICT, PURCHASE_DELETED, PURCHASE_ACTIVE,
+    PURCHASER_UNAVAILABLE, RATE_NOT_CONFIGURED, DATABASE_UNAVAILABLE, INTERNAL_ERROR. No application/platform
+    rate limiter is configured by default.'
+servers:
+  - url: /api/v1
+security: []
+paths:
+  /health:
+    get:
+      summary: Liveness without database access
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required:
+                      - status
+                    properties:
+                      status:
+                        const: ok
+        '400': &a1
+          description: Malformed JSON, query, cursor, or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403': &a2
+          description: Explicitly foreign browser Origin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': &a3
+          description: Unknown resource or route
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409': &a4
+          description: Version, state, name, or idempotency conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413': &a5
+          description: Body exceeds 16 KiB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415': &a6
+          description: Content type must be application/json
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429': &a7
+          description: A configured platform rate limit was reached (none configured by default)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500': &a8
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503': &a9
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /settings:
+    get:
+      summary: Get the singleton settings
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Settings'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+    patch:
+      summary: Set the default rate for future purchases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsPatch'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Settings'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+  /purchasers:
+    get:
+      summary: List active or all purchasers
+      parameters:
+        - name: includeArchived
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Purchaser'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+    post:
+      summary: Create a purchaser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaserCreate'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchaser'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+  /purchasers/{id}:
+    parameters:
+      - &a11
+        name: id
+        in: path
+        required: true
+        schema: &a10
+          type: string
+          format: uuid
+    patch:
+      summary: Rename, archive, or reactivate a purchaser
+      description:
+        Name uniqueness is case-insensitive across active and archived purchasers. Historical purchases
+        display the current name. Archiving is atomic with new purchase/reassignment active checks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaserPatch'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchaser'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+  /purchases:
+    get:
+      summary: Filter and paginate purchases
+      description:
+        Descending (purchasedAt,id) keyset. Cursor includes filters and cannot be reused with different
+        filters. Pagination is not a frozen snapshot under concurrent editing.
+      parameters:
+        - &a12
+          name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Inclusive Tokyo calendar date
+        - &a13
+          name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Inclusive Tokyo calendar date; next midnight excluded
+        - &a14
+          name: purchaserId
+          in: query
+          required: false
+          schema: *a10
+        - &a15
+          name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+          description:
+            Trimmed literal case-insensitive substring in name/description; LIKE wildcards have no special
+            meaning
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - deleted
+            default: active
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 4096
+          description: Opaque cursor from page.nextCursor
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseList'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+    post:
+      summary: Create or safely replay a purchase
+      description:
+        Same UUID and canonical creation hash returns the current active resource with 200 without
+        re-resolving default rate/time. Changed input with same UUID returns IDEMPOTENCY_CONFLICT. Matching
+        deleted resource returns PURCHASE_DELETED and is never restored. New active purchaser required.
+        Derived amounts calculated by server, round-half-up.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseCreate'
+            example:
+              id: 4903709b-cea6-4cb8-9ff4-6362805444db
+              name: Lunch at ramen shop
+              originalAmount: '1500'
+              originalCurrency: JPY
+              purchaserId: 00000000-0000-4000-8000-000000000001
+              purchasedAt: 2026-10-25T14:30:00+09:00
+              exchangeRate: '0.23000000'
+              description: Ramen and tea
+      responses:
+        '200':
+          description: Successful replay
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchase'
+        '201':
+          description: New purchase
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchase'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+  /purchases/{id}:
+    parameters:
+      - *a11
+    get:
+      summary: Get active or soft-deleted purchase detail
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchase'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+    patch:
+      summary: Edit an active purchase using its version
+      description:
+        Stale version returns VERSION_CONFLICT. Text-only edits retain monetary values. Reassignment
+        requires an active purchaser; leaving an existing archived purchaser unchanged is allowed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchasePatch'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchase'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+    delete:
+      summary: Move an active purchase to Trash
+      parameters:
+        - name: version
+          in: query
+          required: true
+          schema: &a16
+            type: integer
+            minimum: 1
+            maximum: 2147483647
+      responses:
+        '204':
+          description: Soft deleted; empty body
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+  /purchases/{id}/restore:
+    parameters:
+      - *a11
+    post:
+      summary: Restore a purchase from Trash
+      description:
+        Restores original saved values. An archived purchaser is permitted. Stale version returns
+        VERSION_CONFLICT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Version'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Purchase'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+  /summary:
+    get:
+      summary: Totals and Tokyo day/purchaser series across all matching active rows
+      description:
+        Uses one consistent SQL statement. Summation uses persisted rounded amounts across all pages.
+        Deleted status and pagination parameters are not accepted. Empty results return count 0, zero string
+        totals and empty arrays.
+      parameters:
+        - *a12
+        - *a13
+        - *a14
+        - *a15
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Summary'
+        '400': *a1
+        '403': *a2
+        '404': *a3
+        '409': *a4
+        '413': *a5
+        '415': *a6
+        '429': *a7
+        '500': *a8
+        '503': *a9
+components:
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+            - requestId
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            fieldErrors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+            requestId: *a10
+    Settings:
+      type: object
+      additionalProperties: false
+      required:
+        - defaultThbPerJpy
+        - version
+        - updatedAt
+        - timezone
+      properties:
+        defaultThbPerJpy:
+          type:
+            - string
+            - 'null'
+        version: *a16
+        updatedAt: &a17
+          type: string
+          format: date-time
+        timezone:
+          const: Asia/Tokyo
+    SettingsPatch:
+      type: object
+      additionalProperties: false
+      required:
+        - defaultThbPerJpy
+        - version
+      properties:
+        defaultThbPerJpy: &a18
+          type: string
+          pattern: ^\d+(\.\d{1,8})?$
+          description: THB for one JPY, greater than zero and at most 100. No market rate is invented.
+        version: *a16
+    Purchaser:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - archived
+        - archivedAt
+        - version
+        - createdAt
+        - updatedAt
+      properties:
+        id: *a10
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        archived:
+          type: boolean
+        archivedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        version: *a16
+        createdAt: *a17
+        updatedAt: *a17
+    PurchaserCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+    PurchaserPatch:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        archived:
+          type: boolean
+        version: *a16
+      anyOf:
+        - required:
+            - name
+        - required:
+            - archived
+    PurchaseCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - originalAmount
+        - originalCurrency
+        - purchaserId
+      properties:
+        id: *a10
+        name: &a19
+          type: string
+          minLength: 1
+          maxLength: 160
+        originalAmount: &a20
+          type: string
+          pattern: ^\d+(\.\d{1,2})?$
+          description: Positive decimal, at most 999999999.99. JPY must use integer syntax.
+        originalCurrency: &a21
+          type: string
+          enum:
+            - JPY
+            - THB
+        purchaserId: *a10
+        description: &a22
+          type: string
+          maxLength: 4000
+          default: ''
+        purchasedAt: &a23
+          type: string
+          format: date-time
+          description:
+            Explicit Z or offset required; omitted on creation means insertion time. Calendar dates must be
+            valid.
+        exchangeRate: *a18
+      description:
+        UUID is generated once and retained across retries. An explicit rate overrides the current
+        default. No default and no explicit rate returns 409 RATE_NOT_CONFIGURED. Unknown or derived fields
+        are rejected.
+    PurchasePatch:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        name: *a19
+        originalAmount: *a20
+        originalCurrency: *a21
+        purchaserId: *a10
+        description: *a22
+        purchasedAt: *a23
+        exchangeRate: *a18
+        version: *a16
+      minProperties: 2
+      dependentRequired:
+        originalCurrency:
+          - originalAmount
+      description:
+        Omitted fields retain saved values. Existing rate retained unless exchangeRate supplied. Require
+        at least one editable field. JPY precision validated against merged currency.
+    Purchase:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - originalAmount
+        - originalCurrency
+        - purchaserId
+        - description
+        - purchasedAt
+        - exchangeRate
+        - rateSource
+        - amountJpy
+        - amountThb
+        - purchaser
+        - createdAt
+        - updatedAt
+        - deletedAt
+        - version
+      properties:
+        id: *a10
+        name: *a19
+        originalAmount: *a20
+        originalCurrency: *a21
+        purchaserId: *a10
+        description:
+          type: string
+        purchasedAt: *a23
+        exchangeRate:
+          type: string
+        rateSource:
+          enum:
+            - default
+            - manual
+        amountJpy:
+          type: string
+        amountThb:
+          type: string
+        purchaser:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - name
+            - archived
+          properties:
+            id: *a10
+            name:
+              type: string
+            archived:
+              type: boolean
+        createdAt: *a17
+        updatedAt: *a17
+        deletedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        version: *a16
+    Totals:
+      type: object
+      additionalProperties: false
+      required:
+        - jpy
+        - thb
+      properties:
+        jpy:
+          type: string
+        thb:
+          type: string
+    Summary:
+      type: object
+      additionalProperties: false
+      required:
+        - timezone
+        - count
+        - totals
+        - byDay
+        - byPurchaser
+      properties:
+        timezone:
+          const: Asia/Tokyo
+        count:
+          type: integer
+          minimum: 0
+        totals:
+          $ref: '#/components/schemas/Totals'
+        byDay:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - date
+              - count
+              - jpy
+              - thb
+            properties:
+              date:
+                type: string
+                format: date
+              count:
+                type: integer
+              jpy:
+                type: string
+              thb:
+                type: string
+        byPurchaser:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - purchaserId
+              - name
+              - count
+              - jpy
+              - thb
+            properties:
+              purchaserId: *a10
+              name:
+                type: string
+              count:
+                type: integer
+              jpy:
+                type: string
+              thb:
+                type: string
+    Version:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+      properties:
+        version: *a16
+    PurchaseList:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - page
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Purchase'
+        page:
+          type: object
+          additionalProperties: false
+          required:
+            - nextCursor
+          properties:
+            nextCursor:
+              type:
+                - string
+                - 'null'

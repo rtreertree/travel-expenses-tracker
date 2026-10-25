@@ -1,0 +1,10 @@
+node_modules
+dist
+.wrangler
+worker-configuration.d.ts
+package-lock.json
+SYSTEM_DESIGN_AND_EXECUTION_PLAN.md
+.dev.vars*
+.env*
+playwright-report
+test-results

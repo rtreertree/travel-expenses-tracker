@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local development. Never add a VITE_ prefix.
+DATABASE_URL="postgresql://USER:PASSWORD@NEON_HOST/neondb?sslmode=require&channel_binding=require"
