@@ -2957,3 +2957,15 @@ tfoot td {
     bottom: 148px;
   }
 }
+
+/* Safari zooms focused controls below 16px. Keep touch inputs readable while
+   allowing normal pinch-to-zoom and retaining the larger purchase amount. */
+@media (max-width: 760px), (any-pointer: coarse) {
+  :root :is(input, select, textarea) {
+    font-size: 16px;
+  }
+
+  :root .amount-entry input {
+    font-size: 28px;
+  }
+}
