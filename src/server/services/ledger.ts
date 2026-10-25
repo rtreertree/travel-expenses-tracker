@@ -14,6 +14,7 @@ import type {
 } from '../../shared/types';
 import { hashCreateRequest } from '../../shared/schemas';
 import { tokyoDateRange } from '../../shared/time';
+import { parseLocation } from '../../shared/location';
 import { z } from 'zod';
 
 const string = (v: unknown) => String(v);
@@ -34,6 +35,7 @@ function purchase(r: Row): Purchase {
     id: string(r.id),
     name: string(r.name),
     description: string(r.description),
+    location: parseLocation(r.location ?? null),
     purchaserId: string(r.purchaser_id),
     originalCurrency: currency,
     originalAmount: new Decimal(string(r.original_amount)).toFixed(currency === 'JPY' ? 0 : 2),
@@ -69,7 +71,9 @@ function filtersWhere(filters: SummaryFilters & { status?: string }): SQL {
   if (filters.purchaserId) terms.push(sql`p.purchaser_id = ${filters.purchaserId}::uuid`);
   if (filters.q) {
     const pattern = `%${filters.q.replace(/[\\%_]/g, '\\$&')}%`;
-    terms.push(sql`(p.name ILIKE ${pattern} OR p.description ILIKE ${pattern})`);
+    terms.push(
+      sql`(p.name ILIKE ${pattern} OR p.description ILIKE ${pattern} OR p.location->>'text' ILIKE ${pattern})`,
+    );
   }
   return sql.join(terms, sql` AND `);
 }
@@ -192,10 +196,13 @@ export class Ledger {
     const rate = sql`coalesce(${input.exchangeRate ?? null}::numeric,s.default_thb_per_jpy)`;
     const amount = sql`${input.originalAmount}::numeric`;
     const currency = input.originalCurrency;
+    const purchaserMatch = input.purchaserId
+      ? sql`id=${input.purchaserId}::uuid`
+      : sql`lower(name)=lower(${input.purchaser ?? 'Me'})`;
     const rows = await this.db
-      .query(sql`WITH payer AS MATERIALIZED (SELECT id,archived_at FROM purchasers WHERE id=${input.purchaserId}::uuid FOR SHARE), inserted AS (
-      INSERT INTO purchases(id,name,description,purchaser_id,original_currency,original_amount,thb_per_jpy,rate_source,amount_jpy,amount_thb,purchased_at,create_request_hash)
-      SELECT ${input.id}::uuid,${input.name},${input.description ?? ''},u.id,${currency},${amount},${rate},${input.exchangeRate ? 'manual' : 'default'},
+      .query(sql`WITH payer AS MATERIALIZED (SELECT id,archived_at FROM purchasers WHERE ${purchaserMatch} FOR SHARE), inserted AS (
+      INSERT INTO purchases(id,name,description,location,purchaser_id,original_currency,original_amount,thb_per_jpy,rate_source,amount_jpy,amount_thb,purchased_at,create_request_hash)
+      SELECT ${input.id}::uuid,${input.name},${input.description ?? ''},${input.location == null ? null : JSON.stringify(input.location)}::jsonb,u.id,${currency},${amount},${rate},${input.exchangeRate ? 'manual' : 'default'},
       CASE WHEN ${currency}='JPY' THEN ${amount} ELSE round(${amount}/${rate},0) END,
       CASE WHEN ${currency}='THB' THEN ${amount} ELSE round(${amount}*${rate},2) END,
       coalesce(${input.purchasedAt ?? null}::timestamptz,now()),${hash}
@@ -205,10 +212,13 @@ export class Ledger {
       const duplicate = await this.replay(input.id, hash);
       if (duplicate) return { data: duplicate, replay: true };
       const [u] = await this.db.query(
-        sql`SELECT archived_at FROM purchasers WHERE id=${input.purchaserId}::uuid`,
+        sql`SELECT archived_at FROM purchasers WHERE ${purchaserMatch}`,
       );
       if (!u || u.archived_at != null)
-        conflict('PURCHASER_UNAVAILABLE', 'Choose an active purchaser.');
+        conflict(
+          'PURCHASER_UNAVAILABLE',
+          'Choose an existing active purchaser by name or ID. The default purchaser is Me.',
+        );
       conflict(
         'RATE_NOT_CONFIGURED',
         'Set a default exchange rate in Settings or enter a purchase rate.',
@@ -230,6 +240,7 @@ export class Ledger {
     const rows = await this.db
       .query(sql`WITH payer AS MATERIALIZED (SELECT id,archived_at FROM purchasers WHERE id=${input.purchaserId ?? null}::uuid FOR SHARE)
       UPDATE purchases p SET name=coalesce(${input.name ?? null},p.name),description=coalesce(${input.description ?? null},p.description),
+      location=CASE WHEN ${input.location !== undefined} THEN ${input.location == null ? null : JSON.stringify(input.location)}::jsonb ELSE p.location END,
       purchaser_id=coalesce(${input.purchaserId ?? null}::uuid,p.purchaser_id),original_currency=${c},original_amount=${a},thb_per_jpy=${r},
       rate_source=CASE WHEN ${input.exchangeRate != null} THEN 'manual' ELSE p.rate_source END,
       amount_jpy=CASE WHEN ${c}='JPY' THEN ${a} ELSE round(${a}/${r},0) END,

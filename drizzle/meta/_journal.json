@@ -15,6 +15,13 @@
       "when": 1792907336933,
       "tag": "0001_seed_and_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792916667442,
+      "tag": "0002_special_mesmero",
+      "breakpoints": true
     }
   ]
 }

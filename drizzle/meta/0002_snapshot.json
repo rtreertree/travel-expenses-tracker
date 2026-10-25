@@ -1,0 +1,388 @@
+{
+  "id": "a37695cd-ae18-494d-962f-e4790637626e",
+  "prevId": "48856a0e-bcab-4178-9726-6da1c73cd793",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.app_settings": {
+      "name": "app_settings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "smallint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "default_thb_per_jpy": {
+          "name": "default_thb_per_jpy",
+          "type": "numeric(12, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "settings_singleton": {
+          "name": "settings_singleton",
+          "value": "\"app_settings\".\"id\" = 1"
+        },
+        "settings_rate": {
+          "name": "settings_rate",
+          "value": "\"app_settings\".\"default_thb_per_jpy\" > 0 AND \"app_settings\".\"default_thb_per_jpy\" <= 100"
+        },
+        "settings_version": {
+          "name": "settings_version",
+          "value": "\"app_settings\".\"version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.purchasers": {
+      "name": "purchasers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(60)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "purchaser_name_unique": {
+          "name": "purchaser_name_unique",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "purchaser_name": {
+          "name": "purchaser_name",
+          "value": "\"purchasers\".\"name\" = btrim(\"purchasers\".\"name\") AND length(\"purchasers\".\"name\") > 0"
+        },
+        "purchaser_version": {
+          "name": "purchaser_version",
+          "value": "\"purchasers\".\"version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.purchases": {
+      "name": "purchases",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "location": {
+          "name": "location",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchaser_id": {
+          "name": "purchaser_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_currency": {
+          "name": "original_currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_amount": {
+          "name": "original_amount",
+          "type": "numeric(20, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "thb_per_jpy": {
+          "name": "thb_per_jpy",
+          "type": "numeric(12, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate_source": {
+          "name": "rate_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_jpy": {
+          "name": "amount_jpy",
+          "type": "numeric(20, 0)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_thb": {
+          "name": "amount_thb",
+          "type": "numeric(20, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purchased_at": {
+          "name": "purchased_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "create_request_hash": {
+          "name": "create_request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "purchase_active_date": {
+          "name": "purchase_active_date",
+          "columns": [
+            {
+              "expression": "purchased_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"purchases\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "purchase_active_payer": {
+          "name": "purchase_active_payer",
+          "columns": [
+            {
+              "expression": "purchaser_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purchased_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"purchases\".\"deleted_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "purchase_trash": {
+          "name": "purchase_trash",
+          "columns": [
+            {
+              "expression": "deleted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "purchases_purchaser_id_purchasers_id_fk": {
+          "name": "purchases_purchaser_id_purchasers_id_fk",
+          "tableFrom": "purchases",
+          "tableTo": "purchasers",
+          "columnsFrom": ["purchaser_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "purchase_name": {
+          "name": "purchase_name",
+          "value": "\"purchases\".\"name\" = btrim(\"purchases\".\"name\") AND length(\"purchases\".\"name\") > 0"
+        },
+        "purchase_description": {
+          "name": "purchase_description",
+          "value": "length(\"purchases\".\"description\") <= 4000"
+        },
+        "purchase_location": {
+          "name": "purchase_location",
+          "value": "\"purchases\".\"location\" IS NULL OR coalesce((\n      jsonb_typeof(\"purchases\".\"location\") = 'object'\n      AND \"purchases\".\"location\" ?& ARRAY['text','latitude','longitude','googleMapsUrl']\n      AND jsonb_typeof(\"purchases\".\"location\"->'text') IN ('null','string')\n      AND (\"purchases\".\"location\"->'text' = 'null'::jsonb OR (\"purchases\".\"location\"->>'text' = btrim(\"purchases\".\"location\"->>'text') AND length(\"purchases\".\"location\"->>'text') BETWEEN 1 AND 2000))\n      AND (jsonb_typeof(\"purchases\".\"location\"->'text') = 'string' OR jsonb_typeof(\"purchases\".\"location\"->'latitude') = 'number')\n      AND ((\n        \"purchases\".\"location\"->'latitude' = 'null'::jsonb AND \"purchases\".\"location\"->'longitude' = 'null'::jsonb\n      ) OR (\n        CASE WHEN jsonb_typeof(\"purchases\".\"location\"->'latitude') = 'number' THEN (\"purchases\".\"location\"->>'latitude')::numeric BETWEEN -90 AND 90 ELSE false END\n        AND CASE WHEN jsonb_typeof(\"purchases\".\"location\"->'longitude') = 'number' THEN (\"purchases\".\"location\"->>'longitude')::numeric BETWEEN -180 AND 180 ELSE false END\n      ))\n      AND jsonb_typeof(\"purchases\".\"location\"->'googleMapsUrl') = 'string'\n      AND length(\"purchases\".\"location\"->>'googleMapsUrl') BETWEEN 1 AND 2048\n    ),false)"
+        },
+        "purchase_currency": {
+          "name": "purchase_currency",
+          "value": "\"purchases\".\"original_currency\" IN ('JPY','THB')"
+        },
+        "purchase_original": {
+          "name": "purchase_original",
+          "value": "\"purchases\".\"original_amount\" > 0 AND \"purchases\".\"original_amount\" <= 999999999.99 AND (\"purchases\".\"original_currency\" <> 'JPY' OR \"purchases\".\"original_amount\" = trunc(\"purchases\".\"original_amount\"))"
+        },
+        "purchase_rate": {
+          "name": "purchase_rate",
+          "value": "\"purchases\".\"thb_per_jpy\" > 0 AND \"purchases\".\"thb_per_jpy\" <= 100"
+        },
+        "purchase_source": {
+          "name": "purchase_source",
+          "value": "\"purchases\".\"rate_source\" IN ('default','manual')"
+        },
+        "purchase_jpy": {
+          "name": "purchase_jpy",
+          "value": "\"purchases\".\"amount_jpy\" >= 0 AND \"purchases\".\"amount_jpy\" = CASE WHEN \"purchases\".\"original_currency\" = 'JPY' THEN \"purchases\".\"original_amount\" ELSE round(\"purchases\".\"original_amount\" / \"purchases\".\"thb_per_jpy\", 0) END"
+        },
+        "purchase_thb": {
+          "name": "purchase_thb",
+          "value": "\"purchases\".\"amount_thb\" >= 0 AND \"purchases\".\"amount_thb\" = CASE WHEN \"purchases\".\"original_currency\" = 'THB' THEN \"purchases\".\"original_amount\" ELSE round(\"purchases\".\"original_amount\" * \"purchases\".\"thb_per_jpy\", 2) END"
+        },
+        "purchase_version": {
+          "name": "purchase_version",
+          "value": "\"purchases\".\"version\" > 0"
+        },
+        "purchase_hash": {
+          "name": "purchase_hash",
+          "value": "\"purchases\".\"create_request_hash\" ~ '^[0-9a-f]{64}$'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

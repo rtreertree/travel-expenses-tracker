@@ -288,8 +288,8 @@ paths:
             type: string
             maxLength: 100
           description:
-            Trimmed literal case-insensitive substring in name/description; LIKE wildcards have no special
-            meaning
+            Trimmed literal case-insensitive substring in purchase name, description, or saved location text.
+            LIKE wildcards have no special meaning. The same filter applies to list and summary.
         - name: status
           in: query
           required: false
@@ -333,25 +333,48 @@ paths:
     post:
       summary: Create or safely replay a purchase
       description:
-        Same UUID and canonical creation hash returns the current active resource with 200 without
-        re-resolving default rate/time. Changed input with same UUID returns IDEMPOTENCY_CONFLICT. Matching
-        deleted resource returns PURCHASE_DELETED and is never restored. New active purchaser required.
-        Derived amounts calculated by server, round-half-up.
+        'Create with only name and price (positive whole yen, as a number or string). Optional purchaser
+        is an existing active name, matched case-insensitively; defaults to Me. The saved default exchange
+        rate and insertion time apply when omitted. Optional id supports retry safety: same UUID and canonical
+        input returns the current active resource with 200 without resolving defaults again; changed input
+        conflicts, and deleted purchases are never restored by replay. With no id each POST creates a new
+        purchase. Derived amounts are calculated by the server, round-half-up.'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PurchaseCreate'
-            example:
-              id: 4903709b-cea6-4cb8-9ff4-6362805444db
-              name: Lunch at ramen shop
-              originalAmount: '1500'
-              originalCurrency: JPY
-              purchaserId: 00000000-0000-4000-8000-000000000001
-              purchasedAt: 2026-10-25T14:30:00+09:00
-              exchangeRate: '0.23000000'
-              description: Ramen and tea
+            examples:
+              minimal:
+                value:
+                  name: Lunch
+                  price: 1500
+              place:
+                value:
+                  name: Temple admission
+                  price: 600
+                  location: 浅草寺, Tokyo
+              gps:
+                value:
+                  name: Tokyo Tower
+                  price: 1500
+                  gps:
+                    lat: 35.6586
+                    lng: 139.7454
+              maps:
+                value:
+                  name: Coffee
+                  price: 500
+                  location: https://www.google.com/maps?q=35.6812,139.7671
+              labeledGps:
+                value:
+                  name: Tokyo Tower admission
+                  price: 1500
+                  location: Tokyo Tower
+                  gps:
+                    lat: 35.6586
+                    lng: 139.7454
       responses:
         '200':
           description: Successful replay
@@ -655,11 +678,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        - id
         - name
-        - originalAmount
-        - originalCurrency
-        - purchaserId
       properties:
         id: *a10
         name: &a19
@@ -687,10 +706,110 @@ components:
             Explicit Z or offset required; omitted on creation means insertion time. Calendar dates must be
             valid.
         exchangeRate: *a18
+        price:
+          description:
+            Price in Japanese yen. Positive whole-yen number or decimal-free string; at most 999999999.
+            Supply price or originalAmount, not both.
+          oneOf:
+            - type: integer
+              minimum: 1
+              maximum: 999999999
+            - type: string
+              maxLength: 32
+              pattern: ^\d+$
+        purchaser:
+          type: string
+          minLength: 1
+          maxLength: 60
+          default: Me
+          description:
+            Existing active purchaser name, trimmed and matched case-insensitively, for example Me, me, A, or
+            a. Supply purchaser or purchaserId, not both. Defaults to Me if neither is supplied; unknown or
+            archived names return 409 PURCHASER_UNAVAILABLE.
+        location:
+          $ref: '#/components/schemas/LocationInput'
+        gps:
+          $ref: '#/components/schemas/LocationInput'
+          description:
+            Alias for location/GPS input. A place label in location can be combined with GPS or paired
+            top-level coordinates. Multiple coordinate sources must agree after normalization; conflicting
+            labels/coordinates or null/empty clearing combined with nonempty data are rejected.
+        latitude:
+          oneOf:
+            - type: number
+              minimum: -90
+              maximum: 90
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -90 and 90; normalized to seven decimal places.
+        lat:
+          oneOf:
+            - type: number
+              minimum: -90
+              maximum: 90
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -90 and 90; normalized to seven decimal places.
+        longitude:
+          oneOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -180 and 180; normalized to seven decimal places.
+        lng:
+          oneOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -180 and 180; normalized to seven decimal places.
+        lon:
+          oneOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -180 and 180; normalized to seven decimal places.
       description:
-        UUID is generated once and retained across retries. An explicit rate overrides the current
-        default. No default and no explicit rate returns 409 RATE_NOT_CONFIGURED. Unknown or derived fields
-        are rejected.
+        The minimal request is {"name":"Lunch","price":1500}. Currency defaults to JPY, purchaser to Me
+        (case-insensitive name lookup), description to empty, and time to insertion time. id is generated if
+        omitted; send a stable UUID for retry safety, since each id-free POST is a new purchase. The existing
+        originalAmount/originalCurrency/purchaserId format remains supported, including THB. An explicit
+        exchangeRate overrides the saved default; missing both returns 409 RATE_NOT_CONFIGURED.
+        Unknown/derived fields, nulls, conflicting amount fields, and conflicting purchaser selectors are
+        rejected. Optional location/gps or paired top-level latitude/longitude (lat/lng/lon aliases) are
+        normalized into location. A location label may be combined with GPS or top-level coordinates and is
+        retained with the coordinate pair. Repeated coordinate sources must agree after normalization;
+        distinct labels, conflicting coordinates, or null/empty clearing combined with nonempty data are
+        rejected. Retry identity includes the normalized location. Omitted/null locations preserve legacy
+        creation identities; equivalent GPS representations replay safely with the same UUID.
+      oneOf:
+        - required:
+            - price
+          not:
+            required:
+              - originalAmount
+        - required:
+            - originalAmount
+          not:
+            required:
+              - price
+      allOf:
+        - not:
+            required:
+              - purchaser
+              - purchaserId
+        - if:
+            required:
+              - price
+          then:
+            properties:
+              originalCurrency:
+                const: JPY
     PurchasePatch:
       type: object
       additionalProperties: false
@@ -705,13 +824,67 @@ components:
         purchasedAt: *a23
         exchangeRate: *a18
         version: *a16
+        location:
+          $ref: '#/components/schemas/LocationInput'
+        gps:
+          $ref: '#/components/schemas/LocationInput'
+          description:
+            Alias for location/GPS input. A place label in location can be combined with GPS or paired
+            top-level coordinates. Multiple coordinate sources must agree after normalization; conflicting
+            labels/coordinates or null/empty clearing combined with nonempty data are rejected.
+        latitude:
+          oneOf:
+            - type: number
+              minimum: -90
+              maximum: 90
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -90 and 90; normalized to seven decimal places.
+        lat:
+          oneOf:
+            - type: number
+              minimum: -90
+              maximum: 90
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -90 and 90; normalized to seven decimal places.
+        longitude:
+          oneOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -180 and 180; normalized to seven decimal places.
+        lng:
+          oneOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -180 and 180; normalized to seven decimal places.
+        lon:
+          oneOf:
+            - type: number
+              minimum: -180
+              maximum: 180
+            - type: string
+              pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+          description: Finite decimal between -180 and 180; normalized to seven decimal places.
       minProperties: 2
       dependentRequired:
         originalCurrency:
           - originalAmount
       description:
         Omitted fields retain saved values. Existing rate retained unless exchangeRate supplied. Require
-        at least one editable field. JPY precision validated against merged currency.
+        at least one editable field. JPY precision validated against merged currency. Optional location/gps or
+        paired top-level latitude/longitude (lat/lng/lon aliases) are normalized into location. A location
+        label may be combined with GPS or top-level coordinates and is retained with the coordinate pair.
+        Repeated coordinate sources must agree after normalization; distinct labels, conflicting coordinates,
+        or null/empty clearing combined with nonempty data are rejected. Omitted location retains the saved
+        value; explicit null/empty clears it. Location-only edits require the current version and do not
+        affect money or exchange-rate snapshots.
     Purchase:
       type: object
       additionalProperties: false
@@ -732,6 +905,7 @@ components:
         - updatedAt
         - deletedAt
         - version
+        - location
       properties:
         id: *a10
         name: *a19
@@ -772,6 +946,10 @@ components:
             - 'null'
           format: date-time
         version: *a16
+        location:
+          oneOf:
+            - $ref: '#/components/schemas/PurchaseLocation'
+            - type: 'null'
     Totals:
       type: object
       additionalProperties: false
@@ -869,3 +1047,134 @@ components:
               type:
                 - string
                 - 'null'
+    PurchaseLocation:
+      type: object
+      additionalProperties: false
+      required:
+        - text
+        - latitude
+        - longitude
+        - googleMapsUrl
+      properties:
+        text:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        latitude:
+          type:
+            - number
+            - 'null'
+          minimum: -90
+          maximum: 90
+        longitude:
+          type:
+            - number
+            - 'null'
+          minimum: -180
+          maximum: 180
+        googleMapsUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description:
+            Safe Google Maps search link generated from the normalized coordinate pair/place text. Trusted
+            Google Maps shortlinks may be retained without network resolution.
+      description:
+        Normalized optional purchase location. Latitude and longitude are either both numbers or both
+        null. No external geocoding or link resolution is performed.
+    LocationInput:
+      description:
+        'Optional location in a common pasted format: place/address text, latitude/longitude pair,
+        labeled decimal coordinates, degrees/minutes/seconds, geo: URI, WKT POINT, Google/Apple/OpenStreetMap
+        link, JSON coordinate array, coordinate object, GeoJSON Point/Feature, or browser geolocation coords.
+        Plain pairs/arrays use latitude,longitude; WKT/GeoJSON use longitude,latitude. A clearly reversed
+        plain pair is corrected when only one ordering is valid. Place text max 2000 characters; generated
+        Maps URL max 2048 encoded characters. Invalid/incomplete/out-of-range numeric data is rejected.
+        Supplied googleMapsUrl is never trusted. null or empty input means no location.'
+      oneOf:
+        - type: 'null'
+        - type: string
+          maxLength: 2000
+        - type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            oneOf:
+              - type: number
+              - type: string
+        - type: object
+          additionalProperties: true
+          properties:
+            text:
+              type:
+                - string
+                - 'null'
+              maxLength: 2000
+            label:
+              type: string
+              maxLength: 2000
+            address:
+              type: string
+              maxLength: 2000
+            place:
+              type: string
+              maxLength: 2000
+            latitude:
+              oneOf:
+                - type: number
+                  minimum: -90
+                  maximum: 90
+                - type: string
+                  pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+              description: Finite decimal between -90 and 90; normalized to seven decimal places.
+            longitude:
+              oneOf:
+                - type: number
+                  minimum: -180
+                  maximum: 180
+                - type: string
+                  pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+              description: Finite decimal between -180 and 180; normalized to seven decimal places.
+            lat:
+              oneOf:
+                - type: number
+                  minimum: -90
+                  maximum: 90
+                - type: string
+                  pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+              description: Finite decimal between -90 and 90; normalized to seven decimal places.
+            lng:
+              oneOf:
+                - type: number
+                  minimum: -180
+                  maximum: 180
+                - type: string
+                  pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+              description: Finite decimal between -180 and 180; normalized to seven decimal places.
+            lon:
+              oneOf:
+                - type: number
+                  minimum: -180
+                  maximum: 180
+                - type: string
+                  pattern: ^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$
+              description: Finite decimal between -180 and 180; normalized to seven decimal places.
+            type:
+              type: string
+              enum:
+                - Point
+                - Feature
+            coordinates:
+              type: array
+              minItems: 2
+              maxItems: 3
+              items:
+                type: number
+            coords:
+              type: object
+            geometry:
+              type: object
+            googleMapsUrl:
+              type: string
+              description: Ignored; the safe link is derived from validated content.

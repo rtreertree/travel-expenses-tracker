@@ -19,6 +19,13 @@ export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
 export type SummaryFilters = z.infer<typeof summaryFiltersSchema>;
 
+export interface PurchaseLocation {
+  text: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  googleMapsUrl: string;
+}
+
 export interface Settings {
   defaultThbPerJpy: string | null;
   version: number;
@@ -40,6 +47,7 @@ export interface Purchase {
   id: string;
   name: string;
   description: string;
+  location: PurchaseLocation | null;
   purchaserId: string;
   purchaser: Pick<Purchaser, 'id' | 'name' | 'archived'>;
   originalCurrency: Currency;

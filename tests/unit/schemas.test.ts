@@ -152,6 +152,39 @@ describe('strict API input validation', () => {
 });
 
 describe('canonical creation identity', () => {
+  it('retains the canonical format of existing detailed creation requests', () => {
+    expect(canonicalCreationInput(valid)).toBe(
+      JSON.stringify({
+        id: valid.id,
+        name: 'ラーメン',
+        originalAmount: '1500',
+        originalCurrency: 'JPY',
+        purchaserId: valid.purchaserId,
+        description: '',
+      }),
+    );
+  });
+
+  it('normalizes simple prices and purchaser-name casing for safe retries', () => {
+    const simple = { id: valid.id, name: 'Lunch', price: 1500 };
+    expect(canonicalCreationInput(simple)).toBe(
+      canonicalCreationInput({
+        ...simple,
+        price: '01500',
+        purchaser: '  mE  ',
+      }),
+    );
+    expect(canonicalCreationInput(simple)).toBe(
+      canonicalCreationInput({
+        id: valid.id,
+        name: 'Lunch',
+        originalAmount: '1500',
+        originalCurrency: 'JPY',
+        purchaser: 'Me',
+      }),
+    );
+  });
+
   it('equates key ordering, trimmed names, decimal spelling, and timestamp offsets', async () => {
     const first = {
       ...valid,

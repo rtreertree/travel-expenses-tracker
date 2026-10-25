@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { PurchaseLocation } from '../../shared/types';
 import {
   pgTable,
   smallint,
@@ -11,6 +12,7 @@ import {
   check,
   index,
   uniqueIndex,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 const instant = (name: string) => timestamp(name, { withTimezone: true, mode: 'string' });
 export const appSettings = pgTable(
@@ -49,6 +51,7 @@ export const purchases = pgTable(
     id: uuid('id').primaryKey(),
     name: varchar('name', { length: 160 }).notNull(),
     description: text('description').notNull().default(''),
+    location: jsonb('location').$type<PurchaseLocation>(),
     purchaserId: uuid('purchaser_id')
       .notNull()
       .references(() => purchasers.id, { onDelete: 'restrict' }),
@@ -68,6 +71,24 @@ export const purchases = pgTable(
   (t) => [
     check('purchase_name', sql`${t.name} = btrim(${t.name}) AND length(${t.name}) > 0`),
     check('purchase_description', sql`length(${t.description}) <= 4000`),
+    check(
+      'purchase_location',
+      sql`${t.location} IS NULL OR coalesce((
+      jsonb_typeof(${t.location}) = 'object'
+      AND ${t.location} ?& ARRAY['text','latitude','longitude','googleMapsUrl']
+      AND jsonb_typeof(${t.location}->'text') IN ('null','string')
+      AND (${t.location}->'text' = 'null'::jsonb OR (${t.location}->>'text' = btrim(${t.location}->>'text') AND length(${t.location}->>'text') BETWEEN 1 AND 2000))
+      AND (jsonb_typeof(${t.location}->'text') = 'string' OR jsonb_typeof(${t.location}->'latitude') = 'number')
+      AND ((
+        ${t.location}->'latitude' = 'null'::jsonb AND ${t.location}->'longitude' = 'null'::jsonb
+      ) OR (
+        CASE WHEN jsonb_typeof(${t.location}->'latitude') = 'number' THEN (${t.location}->>'latitude')::numeric BETWEEN -90 AND 90 ELSE false END
+        AND CASE WHEN jsonb_typeof(${t.location}->'longitude') = 'number' THEN (${t.location}->>'longitude')::numeric BETWEEN -180 AND 180 ELSE false END
+      ))
+      AND jsonb_typeof(${t.location}->'googleMapsUrl') = 'string'
+      AND length(${t.location}->>'googleMapsUrl') BETWEEN 1 AND 2048
+    ),false)`,
+    ),
     check('purchase_currency', sql`${t.originalCurrency} IN ('JPY','THB')`),
     check(
       'purchase_original',

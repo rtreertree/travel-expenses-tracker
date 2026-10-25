@@ -9,6 +9,7 @@ import { useApp } from '../../app/context';
 import { api, ApiError, mutation } from '../../lib/api';
 import { money, readLocal, tokyoDate, tokyoInput, writeLocal } from '../../lib/format';
 import { ErrorNotice, Field } from '../../components/ui';
+import { LocationField } from '../../components/Location';
 
 type Draft = {
   id: string;
@@ -23,8 +24,19 @@ type Draft = {
   customRate: boolean;
   rate: string;
   attempted?: boolean;
+  location: string;
 };
 const DRAFT_KEY = 'tabi.purchase-draft';
+function storedLocationInput(purchase?: Purchase): string {
+  const location = purchase?.location;
+  if (!location) return '';
+  return (
+    location.text ??
+    (location.latitude !== null && location.longitude !== null
+      ? `${location.latitude}, ${location.longitude}`
+      : '')
+  );
+}
 function initialDraft(purchase?: Purchase): Draft {
   if (purchase)
     return {
@@ -39,6 +51,7 @@ function initialDraft(purchase?: Purchase): Draft {
       time: tokyoInput(purchase.purchasedAt),
       customRate: true,
       rate: purchase.exchangeRate,
+      location: storedLocationInput(purchase),
     };
   try {
     const saved = JSON.parse(readLocal(DRAFT_KEY, 'null')) as Draft | null;
@@ -48,7 +61,7 @@ function initialDraft(purchase?: Purchase): Draft {
       typeof saved.name === 'string' &&
       (saved.authority === 'JPY' || saved.authority === 'THB')
     )
-      return saved;
+      return { ...saved, location: typeof saved.location === 'string' ? saved.location : '' };
   } catch {
     /* Invalid browser draft can safely be replaced. */
   }
@@ -64,6 +77,7 @@ function initialDraft(purchase?: Purchase): Draft {
     time: tokyoInput(new Date().toISOString()),
     customRate: false,
     rate: '',
+    location: '',
   };
 }
 export function PurchaseForm({ purchase, onClose }: { purchase?: Purchase; onClose: () => void }) {
@@ -144,6 +158,9 @@ export function PurchaseForm({ purchase, onClose }: { purchase?: Purchase; onClo
     let body: Record<string, unknown> = { name: draft.name, description: draft.description };
     if (purchase) {
       body.version = version;
+      // Omit an untouched location so text-only edits preserve the exact saved coordinates.
+      if (draft.location !== storedLocationInput(purchase))
+        body.location = draft.location.trim() ? draft.location : null;
       if (
         draft.amount !== purchase.originalAmount ||
         draft.authority !== purchase.originalCurrency
@@ -164,6 +181,7 @@ export function PurchaseForm({ purchase, onClose }: { purchase?: Purchase; onClo
         originalCurrency: draft.authority,
         purchaserId: selectedId,
       };
+      if (draft.location.trim()) body.location = draft.location;
       if (draft.customTime) body.purchasedAt = `${draft.time}:00+09:00`;
       if (draft.customRate) body.exchangeRate = draft.rate;
     }
@@ -445,6 +463,13 @@ export function PurchaseForm({ purchase, onClose }: { purchase?: Purchase; onClo
               onChange={(event) => update({ description: event.target.value })}
             />
           </Field>
+          <LocationField
+            value={draft.location}
+            disabled={save.isPending}
+            storedLocation={purchase?.location}
+            storedValue={storedLocationInput(purchase)}
+            onChange={(location) => update({ location })}
+          />
         </div>
         <footer className="dialog-footer">
           <button

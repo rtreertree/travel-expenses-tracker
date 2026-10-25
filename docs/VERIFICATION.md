@@ -2,20 +2,36 @@
 
 Verified on 2026-10-25 (Asia/Bangkok).
 
-| Check                                     | Result                                                                                                    |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Shared domain unit tests                  | 40 passed                                                                                                 |
-| Isolated PostgreSQL API/integration tests | 16 passed                                                                                                 |
-| Cloudflare Worker runtime tests           | 5 passed                                                                                                  |
-| Playwright browser tests                  | 4 passed: lifecycle and failed-save retry on desktop and 375 px mobile, including Bangkok device timezone |
-| Strict TypeScript                         | Passed                                                                                                    |
-| ESLint                                    | Passed                                                                                                    |
-| Prettier formatting                       | Passed                                                                                                    |
-| Production build                          | Passed; separate dashboard/settings bundles, no oversized-chunk warning                                   |
-| Drizzle schema generation                 | No schema changes after committed migrations                                                              |
-| Dependency audit                          | 0 vulnerabilities after tested transitive development-tool overrides                                      |
-| Frontend secret scan                      | No supplied database URL, password, or database hostname in any browser asset                             |
-| Desktop/mobile visual inspection          | Passed, including populated charts, tables, and purchases                                                 |
+| Check                                     | Result                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Shared domain unit tests                  | 133 passed                                                                                                                |
+| Isolated PostgreSQL API/integration tests | 32 passed                                                                                                                 |
+| Cloudflare Worker runtime tests           | 5 passed                                                                                                                  |
+| Playwright browser tests                  | 12 passed: lifecycle, retries, location recovery, GPS fallback, cancellation and stale callbacks on desktop/375 px mobile |
+| Strict TypeScript                         | Passed                                                                                                                    |
+| ESLint                                    | Passed                                                                                                                    |
+| Prettier formatting                       | Passed                                                                                                                    |
+| Production build                          | Passed; separate dashboard/settings bundles, no oversized-chunk warning                                                   |
+| Drizzle schema generation                 | No schema changes after committed migrations                                                                              |
+| Dependency audit                          | 0 vulnerabilities after tested transitive development-tool overrides                                                      |
+| Frontend secret scan                      | No supplied database URL, password, or database hostname in any browser asset                                             |
+| Desktop/mobile visual inspection          | Passed, including populated charts, tables, and purchases                                                                 |
+
+## Simplified creation API
+
+Purchase creation accepts only `name` and whole-yen `price`, with a generated ID, default purchaser Me, current insertion time, and the saved default rate. Optional purchaser names match case-insensitively. Seven additional isolated API tests verify minimal/named creation, invalid inputs, defaults, archived/missing purchaser handling, compatibility with the detailed UI request, and safe UUID replay. Two unit tests preserve existing canonical hashes and verify normalization of the new input shape. The existing desktop/mobile browser flows still pass. This API change needs no database migration.
+
+## Purchase GPS and locations
+
+The optional location feature was verified through 82 additional unit cases for parsing, normalization, alias merging, ranges, map-link safety, and unchanged legacy creation hashes; nine API/integration tests cover saved location persistence and migration compatibility. The six new browser cases cover pasted coordinate/map inputs, exact pin links, unchanged location retention, clearing, trash/restore, GPS capture and denial, failed-save retry identity, and late GPS callbacks after edits, closing, or submission. Existing purchase and settings flows still pass. Location inputs retain at least 16px text on touch layouts, including landscape.
+
+The additive `0002_special_mesmero.sql` migration was reviewed and applied to the supplied Neon database. A read-only check after migration confirmed the nullable JSONB column and all four existing purchase rows, which retained null locations. No test records were added to Neon. The application does not automatically add GPS to old purchases or perform server-side geocoding; text places and shortened map links retain null coordinates until coordinates are supplied.
+
+## GPS timeout handling
+
+After a real browser timeout was reported, the initial fresh/high-accuracy 10-second request was replaced with a recent balanced fix (20 seconds, maximum cache age 60 seconds) and one automatic high-accuracy retry (30 seconds) for timeout/unavailable errors. Permission denial is not retried. Requests are canceled logically on edits, closing, saving, or the cancel button; stale callbacks cannot launch further retries or alter a draft.
+
+Nine unit cases verify request options, retry boundaries, cancellation, permission handling, synchronous failures, and ignored callbacks. Two additional desktop/mobile browser cases verify automatic fallback success, displayed accuracy, final timeout guidance, cancellation, and retained form input. All 133 unit tests and 12 browser tests pass, along with typecheck, lint, and the production build. Browser tests simulate provider responses; real GPS availability still depends on device Location Services, browser permission, Wi-Fi, and connectivity.
 
 ## Supplied Neon database
 

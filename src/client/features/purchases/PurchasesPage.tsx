@@ -21,6 +21,7 @@ import { money, tokyoDate } from '../../lib/format';
 import { FiltersBar } from '../../components/Filters';
 import { Empty, ErrorNotice, Loading } from '../../components/ui';
 import { SummaryCards } from '../../components/SummaryCards';
+import { LocationDisplay } from '../../components/Location';
 
 export function PurchasesPage() {
   const { filters, currency, openPurchase, notify } = useApp();
@@ -230,6 +231,7 @@ export function PurchasesPage() {
                         {isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                       </button>
                     </div>
+                    {purchase.location && <LocationDisplay location={purchase.location} compact />}
                     {isExpanded && (
                       <div className="purchase-detail">
                         <dl>
@@ -258,6 +260,7 @@ export function PurchasesPage() {
                             </dd>
                           </div>
                         </dl>
+                        {purchase.location && <LocationDisplay location={purchase.location} />}
                         {purchase.description && (
                           <p className="purchase-description">{purchase.description}</p>
                         )}
